@@ -8,7 +8,7 @@ class Controls: # Control map subtitles
 
 class Maps: # Map types and the name of maps
     def __init__(self):
-        self.control = ['Ilios', 'Lijiang Tower', 'Nepal', 'Oasis', 'Busan']
-        self.assault = ['Horizon Lunar Colony', 'Temple of Anubis', 'Volskaya Industries', 'Paris', 'Hanamura']
-        self.hybrid = ['King\'s Row', 'Eichenwalde', 'Numbani', 'Hollywood', 'Blizzard World']
-        self.escort = ['Route 66', 'Watchpoint: Gibraltar', 'Dorado', 'Rialto', 'Havana', 'Junkertown']
+        self.control = ['Ilios', 'Lijiang Tower', 'Oasis']
+        self.push = ['New Queen Street', 'Colosseo']
+        self.hybrid = ['King\'s Row', 'Eichenwalde', 'Midtown']
+        self.escort = ['Route 66', 'Watchpoint: Gibraltar', 'Dorado', 'Circuit Royal']

@@ -1,0 +1,22 @@
+teamabbr : dict = {
+    'Atlanta Reign': 'ATL',
+    'Boston Uprising': 'BOS',
+    'Chengdu Hunters': 'CDH',
+    'Dallas Fuel': 'DAL',
+    'Florida Mayhem': 'FLA',
+    'Guangzhou Charge': 'GZC',
+    'Hangzhou Spark': 'HZS',
+    'Houston Outlaws': 'HOU',
+    'London Spitfire': 'LDN',
+    'Los Angeles Gladiators': 'GLA',
+    'Los Angeles Valiant': 'VAL',
+    'New York Excelsior': 'NYE',
+    'Paris Eternal': 'PAR',
+    'Philadelphia Fusion': 'PHI',
+    'San Francisco Shock': 'SFS',
+    'Seoul Dynasty': 'SEO',
+    'Toronto Defiant': 'TOR',
+    'Shanghai Dragons': 'SHD',
+    'Vancouver Titans': 'VAN',
+    'Washington Justice': 'WAS'
+}

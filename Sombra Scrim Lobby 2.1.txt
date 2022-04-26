@@ -1,0 +1,375 @@
+variables
+{
+	global:
+		0: WorkshopVersion
+		2: GameMode
+		3: ScoreModified
+		4: TournamentMode
+		12: MapInfoLogged
+		17: FirstRoundDone
+
+	player:
+		0: IsUlting
+}
+
+subroutines
+{
+	0: LogMapGamemodeInfo
+	1: LogHybridInfo
+}
+
+rule("First attack done")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Is Between Rounds == True;
+		Is Team On Offense(Team 2) == True;
+		Global.ScoreModified == 0;
+	}
+
+	action
+	{
+		Wait(15, Ignore Condition);
+		Global.FirstRoundDone = True;
+	}
+}
+
+rule("Set Team Scores")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Global.ScoreModified == 0;
+		Global.FirstRoundDone == True;
+		Global.TournamentMode == False;
+	}
+
+	action
+	{
+		Global.ScoreModified = 1;
+		If(Global.GameMode == 1);
+			Set Team Score(Team 2, 3);
+		Else If(Global.GameMode == 2);
+			Set Team Score(Team 2, 2);
+	}
+}
+
+rule("Set Game Mode")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Global.GameMode == 0;
+	}
+
+	action
+	{
+		If(Current Game Mode == Game Mode(호위) || Current Game Mode == Game Mode(혼합));
+			Global.GameMode = 1;
+		Else If(Current Game Mode == Game Mode(밀기));
+			Global.GameMode = 2;
+		Else If(Current Game Mode == Game Mode(쟁탈));
+			Global.GameMode = 3;
+	}
+}
+rule("Reset Map Info")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Is Game In Progress == False;
+		Global.MapInfoLogged == True;
+	}
+
+	action
+	{
+		Global.MapInfoLogged = False;
+	}
+}
+
+rule("Log Map Info")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Global.MapInfoLogged == False;
+	}
+
+	action
+	{
+		Global.MapInfoLogged = True;
+		Global.WorkshopVersion = 2.100;
+		Log To Inspector(Custom String("{0},{1},{2}", Current Map, Team Of(Players In Slot(0, Team 1)), Custom String("{0},{1},{2}",
+			Team Of(Players In Slot(0, Team 2)), Objective Index, Global.WorkshopVersion)));
+		Log To Inspector(Custom String("{0},{1},{2}", Custom String("{0},{1},{2}", Players In Slot(0, Team 1), Players In Slot(1, Team 1),
+			Players In Slot(2, Team 1)), Custom String("{0},{1},{2}", Custom String("{0},{1},{2}", Players In Slot(3, Team 1),
+			Players In Slot(4, Team 1), Players In Slot(5, Team 1)), Players In Slot(0, Team 2), Players In Slot(1, Team 2)),
+			Custom String("{0},{1}", Custom String("{0},{1},{2}", Players In Slot(2, Team 2), Players In Slot(3, Team 2), Players In Slot(
+			4, Team 2)), Players In Slot(5, Team 2))));
+	}
+}
+
+rule("Global Logging - Ongoing")
+{
+	event
+	{
+		Ongoing - Global;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Global.MapInfoLogged == True;
+		Is Between Rounds == False;
+	}
+
+	action
+	{
+		Wait(1, Ignore Condition);
+		Call Subroutine(LogMapGamemodeInfo);
+		Loop If Condition Is True;
+	}
+}
+
+rule("Global Logging - Subroutine")
+{
+	event
+	{
+		Subroutine;
+		LogMapGamemodeInfo;
+	}
+
+	action
+	{
+		If(Current Game Mode == Game Mode(쟁탈));
+			"time, team 1 percentage, team 2 percentage"
+			Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Control Mode Scoring Percentage(Team 1),
+				Control Mode Scoring Percentage(Team 2)));
+		Else If(Current Game Mode == Game Mode(호위));
+			"time, team 1 attacking (else is team 2), payload progress percentage"
+			Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Payload Progress Percentage));
+		Else If(Current Game Mode == Game Mode(밀기));
+			"time, team 1 attacking (else is team 2), point capture percentage"
+			Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Point Capture Percentage));
+		Else If(Current Game Mode == Game Mode(혼합));
+			If(Is Team On Offense(Team 1) == True);
+				Call Subroutine(LogHybridInfo);
+			Else;
+				If(Team Score(Team 2) >= 1);
+					"time, team 1 attacking (else is team 2), payload progress percentage"
+					Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Payload Progress Percentage));
+				Else;
+					"time, team 1 attacking (else is team 2), point capture percentage"
+					Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Point Capture Percentage));
+	}
+}
+
+rule("Global Logging - Subroutine 2")
+{
+	event
+	{
+		Subroutine;
+		LogHybridInfo;
+	}
+
+	action
+	{
+		If(Team Score(Team 1) >= 1);
+			"time, team 1 attacking (else is team 2), payload progress percentage"
+			Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Payload Progress Percentage));
+		Else;
+			"time, team 1 attacking (else is team 2), point capture percentage"
+			Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Is Team On Offense(Team 1), Point Capture Percentage));
+	}
+}
+
+rule("Player Logging - Ongoing")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Global.MapInfoLogged == True;
+		Is Between Rounds == False;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},{1},{2}", Total Time Elapsed, Event Player, Custom String("{0},{1},{2}", Hero Of(Event Player),
+			Player Stat(Event Player, Hero Damage Dealt), Custom String("{0},{1},{2}", Player Stat(Event Player, Barrier Damage Dealt),
+			Player Stat(Event Player, Damage Blocked), Custom String("{0},{1},{2}", Player Stat(Event Player, Damage Taken), Player Stat(
+			Event Player, Deaths), Custom String("{0},{1},{2}", Player Stat(Event Player, Eliminations), Player Stat(Event Player,
+			Final Blows), Custom String("{0},{1},{2}", Player Stat(Event Player, Environmental Deaths), Player Stat(Event Player,
+			Environmental Kills), Custom String("{0},{1},{2}", Player Stat(Event Player, Healing Dealt), Player Stat(Event Player,
+			Objective Kills), Custom String("{0},{1},{2}", Player Stat(Event Player, Solo Kills), Player Stat(Event Player,
+			Ultimates Earned), Custom String("{0},{1},{2}", Player Stat(Event Player, Ultimates Used), Player Hero Stat(Event Player,
+			Hero Of(Event Player), Healing Received), Custom String("{0},{1},{2}", Ultimate Charge Percent(Event Player), Position Of(
+			Event Player), Custom String("{0},{1},{2}", Team Of(Event Player), Ability Cooldown(Event Player, Button(Ability 1)),
+			Custom String("{0},{1},{2}", Ability Cooldown(Event Player, Button(Ability 2)), Ability Cooldown(Event Player, Button(
+			Secondary Fire)), Custom String("{0},{1},{2}", Ability Cooldown(Event Player, Button(Crouch)), Is Alive(Event Player),
+			Custom String("{0},{1},{2}", Total Time Elapsed, Max Health(Event Player), Custom String("{0},{1},{2}", Health(Event Player),
+			Player Stat(Event Player, Defensive Assists), Custom String("{0},{1},{2}", Player Stat(Event Player, Offensive Assists),
+			Has Status(Event Player, Burning), Custom String("{0},{1},{2}", Has Status(Event Player, Knocked Down), Has Status(
+			Event Player, Asleep), Custom String("{0},{1},{2}", Has Status(Event Player, Frozen), Has Status(Event Player, Unkillable),
+			Custom String("{0},{1},{2}", Has Status(Event Player, Invincible), Has Status(Event Player, Hacked), Custom String(
+			"{0},{1},{2}", Has Status(Event Player, Rooted), Has Status(Event Player, Stunned), Custom String("{0},{1},{2}",
+			Facing Direction Of(Event Player), Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(0, Team 1)),
+			Barriers Do Not Block LOS), Custom String("{0},{1},{2}", Is In Line of Sight(Eye Position(Event Player), Eye Position(
+			Players In Slot(1, Team 1)), Barriers Do Not Block LOS), Is In Line of Sight(Eye Position(Event Player), Eye Position(
+			Players In Slot(2, Team 1)), Barriers Do Not Block LOS), Custom String("{0},{1},{2}", Is In Line of Sight(Eye Position(
+			Event Player), Eye Position(Players In Slot(3, Team 1)), Barriers Do Not Block LOS), Is In Line of Sight(Eye Position(
+			Event Player), Eye Position(Players In Slot(4, Team 1)), Barriers Do Not Block LOS), Custom String("{0},{1},{2}",
+			Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(0, Team 2)), Barriers Do Not Block LOS),
+			Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(1, Team 2)), Barriers Do Not Block LOS),
+			Custom String("{0},{1},{2}", Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(2, Team 2)),
+			Barriers Do Not Block LOS), Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(3, Team 2)),
+			Barriers Do Not Block LOS), Is In Line of Sight(Eye Position(Event Player), Eye Position(Players In Slot(4, Team 2)),
+			Barriers Do Not Block LOS)))))))))))))))))))))))))));
+		Wait(1, Ignore Condition);
+		"(do at end)"
+		Loop If(Is Game In Progress);
+	}
+}
+
+rule("Log Event - FB")
+{
+	event
+	{
+		Player Dealt Final Blow;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},FinalBlow,{1},{2}", Total Time Elapsed, Event Player, Custom String("{0},{1}", Victim,
+			Event Ability)));
+	}
+}
+
+rule("Log Event - PD")
+{
+	event
+	{
+		Player Died;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		(Event Was Environment || Attacker == Event Player) == True;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},Suicide,{1}", Total Time Elapsed, Event Player));
+	}
+}
+
+rule("Log Event - Resurrect")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Has Status(Event Player, Phased Out) == True;
+		Is In Spawn Room(Event Player) == False;
+		Is Hero Being Played(Hero(메르시), Team Of(Event Player)) == True;
+		Ability Cooldown(First Of(Players On Hero(Hero(메르시), Team Of(Event Player))), Button(Ability 2)) >= 5;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},Resurrected,{1}", Total Time Elapsed, Event Player));
+	}
+}
+
+rule("Log Event - Echo Duplicate Start")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Hero Of(Event Player) == Hero(에코);
+		Is Duplicating(Event Player) == True;
+		Event Player.IsUlting == False;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},DuplicatingStart,{1},{2}", Total Time Elapsed, Event Player, Hero Being Duplicated(
+			Event Player)));
+		Event Player.IsUlting = True;
+	}
+}
+
+rule("Log Event - Echo Duplicate End")
+{
+	event
+	{
+		Ongoing - Each Player;
+		All;
+		All;
+	}
+
+	condition
+	{
+		Is Game In Progress == True;
+		Hero Of(Event Player) == Hero(에코);
+		Is Duplicating(Event Player) == False;
+		Event Player.IsUlting == True;
+	}
+
+	action
+	{
+		Log To Inspector(Custom String("{0},DuplicatingEnd,{1}", Total Time Elapsed, Event Player));
+		Event Player.IsUlting = False;
+	}
+}

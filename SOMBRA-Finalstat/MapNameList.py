@@ -23,6 +23,10 @@ mapnamelist = [
     "Hollywood",
     "Rialto",
     "Route 66",
+    "Midtown",
+    "Circuit Royal",
+    "New Queen Street",
+    "Colosseo"
 ]
 
 mapname_typocorrection = {

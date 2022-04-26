@@ -8,6 +8,7 @@ from MySQLConnection import *
 from MapNameList import *
 from sqlalchemy import exc
 from mysql_auth import mysql_auth
+from TeamAbbr import teamabbr
 
 class ScrimLog():
     def __init__(self, teamname=None, tablename=None):
@@ -15,15 +16,13 @@ class ScrimLog():
             pass 
         else:
             self.teamname = teamname
+            self.ownerteam = teamabbr[self.teamname]
             self.rawdb_dbname = teamname + '_Rawdb'
             self.tablename = tablename
-            self.match_id = tablename[0:11] # match_id: '(yyyymmdd)_(scrimNum)' (e.g. 20200318_02)
+            self.match_id = tablename[0:13] # match_id: '(yyyymmdd)_(scrimNum)' (e.g. 220423_214759 from 220423_214759_Lijiang Tower)
             # define num_map
-            mapname = tablename.split('_')[3].split('.')[0]
-            if mapname in mapnamelist:
-                self.num_map = 1
-            else: 
-                self.num_map = mapname[-1]
+            mapname = tablename.split('_')[2]
+            self.num_map = 0
             self.set_table_df_list(tablename)
             self.set_index()
             self.set_WorkshopStat()
@@ -94,8 +93,12 @@ class ScrimLog():
 
         # team name
         #NYE_alt_names = ['NYXL', 'Team 1', '1팀', 'New York Excelsior', 'New York']
-        team_one_name = self.df_init['Team'].unique()[0]
-        team_two_name = self.df_init['Team'].unique()[1]
+        # DB를 받아올 때 team을 받아오니까 그 팀(Owner Team)을 Team1 Name으로 지정, 그것이 아닌 팀을 Team 2로 설정 
+        team_one_name = self.ownerteam
+        if self.ownerteam != self.df_init['Team'].unique()[0]:
+            team_two_name = self.df_init['Team'].unique()[0]
+        else :
+            team_two_name = self.df_init['Team'].unique()[1]
 
         '''
         if team_one_name == 'NYE':
@@ -204,7 +207,7 @@ class ScrimLog():
         def EchoDuplicate(df_FinalStat):
             if 'DuplicateStatus' in df_FinalStat.columns:
                 F_Duplicating = df_FinalStat[['DuplicateStatus']].replace('DUPLICATING', 1).fillna(0)
-                F_Duplicating = df_FinalStat[['DuplicateStatus']].replace('', 0).fillna(0)
+                F_Duplicating = F_Duplicating[['DuplicateStatus']].replace('', 0)
                 F_Duplicating.rename(columns={'DuplicateStatus':'IsEchoUlt'}, inplace=True)
                 IsEchoUlt = F_Duplicating.groupby(['MatchId', 'Map', 'Section', 'Player', 'Hero']).diff().fillna(0)
                 result = pd.merge(df_FinalStat, IsEchoUlt, left_index=True, right_index=True)
@@ -216,7 +219,6 @@ class ScrimLog():
         df_FinalStat = EchoDuplicate(df_FinalStat)
 
         self.df_FinalStat = df_FinalStat
-        print(self.df_FinalStat)
 
     def get_df_FinalStat(self):
         return self.df_FinalStat
@@ -248,11 +250,8 @@ class ScrimLog():
         rawdb_conn = pymysql.connect(host = db_login['hostname'], port = int(db_login['port']), user = db_login['username'], passwd = db_login['pwd'], db = rawdb_dbname)
         cursor = rawdb_conn.cursor()
         
-        print(tablename)
         scrimlog = ScrimLog(teamname, tablename)
         df_keys = scrimlog.df_FinalStat.reset_index().keys()
-        for i in range(0, len(df_keys)):
-            print(df_keys[i])
         df_sql = MySQLConnection(dbname=teamname, input_df=scrimlog.df_FinalStat.reset_index()) # reset_index to export to mysql db
         try: # Insert dataframe into DB except duplicated primary keys
             df_sql.export_to_db(table_name='finalstat', if_exists='append')
@@ -266,3 +265,13 @@ class ScrimLog():
             rawdb_conn.commit()
         
         rawdb_conn.close()
+
+
+def main():
+    teamName = "New York Excelsior"
+    fileName = "220423_214759_route 66"
+    scrim_sql = ScrimLog().update_FinalStat_to_sql(teamName, fileName)
+
+       
+if __name__ == "__main__":
+    main()
