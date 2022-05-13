@@ -1,14 +1,15 @@
 import pymysql
 from mysqlAuth import MysqlAuth
-from logDataStruct import LogPattern, MatchInfo, PlayerData
+from logDataStruct import LogPattern, MatchInfo, PlayerData, deltaX
 from google.cloud import storage
 from mapInfo import Controls, Maps
+from UserAbbr import userabbr, convertUserName, setTeamName
         
 class LogHandler: # Log Parsing & Handling
     def __init__(self, teamName, fileName, text):
         auth = MysqlAuth.auth_info
         self.teamName = teamName
-        self.dbName = teamName + '_Rawdb'
+        self.dbName = 'mcn_rawdb'
         self.logtext = text
         self.fileName = fileName
         self.logpattern = LogPattern()
@@ -21,6 +22,7 @@ class LogHandler: # Log Parsing & Handling
         self.sectionNumber = 0
         self.mysqlConnection = pymysql.connect(host=auth['host'], user=auth['user'], password=auth['password'], port=auth['port'], db=self.dbName)
         self.cursor = self.mysqlConnection.cursor()
+        self.deltaX: dict = {}
     
     def __del__(self):
         print('finished')
@@ -44,15 +46,7 @@ class LogHandler: # Log Parsing & Handling
             if self.logpattern.pattern_playerData.match(line):    # pattern 3 : Player Match data
                 self.playerData_stream_handler(basket_list)
                 self.boolean_handler(basket_list)
-                player = line[11:].split(',')[1]
-                if player != '냐옹' and player != 'nuGget' and player != 'Myun****':
-                    pass
-                elif player == '냐옹':
-                    player = 'Yaki'
-                elif player == 'nuGget':
-                    player = 'Kellan'
-                elif player == 'Myun****':
-                    player = 'Myunb0ng'
+                player = convertUserName(line[11:].split(',')[1])
                 self.export_to_db(player)
             
             elif self.logpattern.pattern_matchInfo.match(line):       # pattern 1 : MatchInfo
@@ -78,6 +72,7 @@ class LogHandler: # Log Parsing & Handling
 
             elif self.logpattern.pattern_resurrect.match(line): #pattern 8 : resurrect
                 self.resurrect_stream_handler(basket_list)
+        
         return self.fileName
 
     def matchInfo_stream_handler(self,basket_list): # set MatchInfo Class
@@ -89,6 +84,7 @@ class LogHandler: # Log Parsing & Handling
             self.matchInfo.Version = basket_list[4]
         elif len(basket_list) == 4:
             self.matchInfo.Version = 2.10
+        print(self.matchInfo.Version)
         self.matchInfo.Section = str(int(self.matchInfo.Section) + 1)
         self.set_map_type()
         
@@ -111,36 +107,20 @@ class LogHandler: # Log Parsing & Handling
     def playerInfo_stream_handler(self,basket_list): # define playerDataDict dictionary(type : {str, dict PlayerData}), and also set player name on PlayerData dict
         self.playerList = basket_list
         for i in range(0, len(self.playerList)):
-            if self.playerList[i] != '냐옹' and self.playerList[i] != 'nuGget' and self.playerList[i] != 'Myun****':
-                player = self.playerList[i]
-            elif self.playerList[i] == '냐옹':
-                player = 'Yaki'
-                self.playerList[i] = 'Yaki'
-            elif self.playerList[i] == 'nuGget':
-                player = 'Kellan'
-                self.playerList[i] = 'Kellan'
-            elif self.playerList[i] == 'Myun****':
-                player = 'Myunb0ng'
-                self.playerList[i] = 'Myunb0ng'
+            player = convertUserName(self.playerList[i])
+            self.playerList[i] = player
             self.playerDataDict[player] = PlayerData()
             self.playerDataDict[player].Player = player
+        team_one, team_two = setTeamName(basket_list)
+        self.matchInfo.Team_1 = team_one
+        self.matchInfo.Team_2 = team_two
+        print(team_one, basket_list[0:5])
+        print(team_two, basket_list[5:10])
     
     def playerData_stream_handler(self,basket_list): # set playerDataDict dictonary(type : {str, dict PlayerData})
-        userProfile = ''
-        if basket_list[1] != '냐옹' and basket_list[1] != 'nuGget' and basket_list[1] != 'Myun****':
-            userProfile = basket_list[1]
-        elif basket_list[1] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[1] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[1] == 'Myun****':
-            userProfile = 'Myunb0ng'
-
+        userProfile = convertUserName(basket_list[1])
         if self.initialTimestamp == 0:
             self.initialTimestamp = float(basket_list[0])
-            idx = self.playerList.index(userProfile)
-        if userProfile == "Soldier: 76":
-            print(userProfile)
         self.playerDataDict[userProfile].Map = self.matchInfo.Map
         self.playerDataDict[userProfile].Version = self.matchInfo.Version
 
@@ -171,30 +151,112 @@ class LogHandler: # Log Parsing & Handling
                 elif self.team1OffenseFlag == 'True':
                     self.playerDataDict[userProfile].RoundName = 'Defense'
         hero = ''
-        if basket_list[2] != 'Lúcio' and basket_list[2] != 'Torbjörn' and basket_list[2] != 'D.Va':
+        if basket_list[2] != 'Lúcio' and basket_list[2] != 'Torbjörn':
             hero = basket_list[2]
         elif basket_list[2] == 'Lúcio':
             hero = 'Lucio'
         elif basket_list[2] == 'Torbjörn':
             hero = 'Torbjorn'
-        elif basket_list[2] == 'D.Va':
-            hero = 'DVa'
+            
+        if basket_list[2] == '':
+            hero = self.playerDataDict[userProfile].Hero
+            
+        if float(self.playerDataDict[userProfile].HeroDamageDealt) <= float(basket_list[3]):
+            self.playerDataDict[userProfile].HeroDamageDealt = basket_list[3]
+            self.playerDataDict[userProfile].BarrierDamageDealt = basket_list[4]
+            self.playerDataDict[userProfile].DamageBlocked = basket_list[5]
+            self.playerDataDict[userProfile].DamageTaken = basket_list[6]
+            self.playerDataDict[userProfile].Deaths = basket_list[7]
+            self.playerDataDict[userProfile].Eliminations = basket_list[8]
+            self.playerDataDict[userProfile].FinalBlows = str(int(basket_list[9]) + int(basket_list[11]))
+            self.playerDataDict[userProfile].EnvironmentalDeaths = basket_list[10]
+            self.playerDataDict[userProfile].EnvironmentalKills = basket_list[11]
+            self.playerDataDict[userProfile].HealingDealt = basket_list[12]
+            self.playerDataDict[userProfile].ObjectiveKills = basket_list[13]
+            self.playerDataDict[userProfile].SoloKills = basket_list[14]
+            self.playerDataDict[userProfile].UltimatesEarned = basket_list[15]
+            self.playerDataDict[userProfile].UltimatesUsed = basket_list[16]
+            self.playerDataDict[userProfile].HealingReceived = basket_list[17] # if workshop code gonna improved then we should have delete handling process about healingreceived
+            self.playerDataDict[userProfile].DefensiveAssists = basket_list[31]
+            self.playerDataDict[userProfile].OffensiveAssists = basket_list[32]
+        else:
+            print(basket_list)
+            if userProfile not in self.deltaX:
+                self.deltaX[userProfile] = deltaX()
+            self.deltaX[userProfile].HeroDamageDealt = round(float(basket_list[3]) - float(self.deltaX[userProfile].HeroDamageDealt), 2)
+            self.playerDataDict[userProfile].HeroDamageDealt = str(round(float(self.playerDataDict[userProfile].HeroDamageDealt) + self.deltaX[userProfile].HeroDamageDealt, 2))
+            self.deltaX[userProfile].HeroDamageDealt = round(float(basket_list[3]), 2)
+
+            self.deltaX[userProfile].BarrierDamageDealt = round(float(basket_list[4]) - float(self.deltaX[userProfile].BarrierDamageDealt), 2)
+            self.playerDataDict[userProfile].BarrierDamageDealt = str(round(float(self.playerDataDict[userProfile].BarrierDamageDealt) + self.deltaX[userProfile].BarrierDamageDealt, 2))
+            self.deltaX[userProfile].BarrierDamageDealt = round(float(basket_list[4]), 2)
+
+            self.deltaX[userProfile].DamageBlocked = round(float(basket_list[5]) - float(self.deltaX[userProfile].DamageBlocked), 2)
+            self.playerDataDict[userProfile].DamageBlocked = str(round(float(self.playerDataDict[userProfile].DamageBlocked) + self.deltaX[userProfile].DamageBlocked, 2))
+            self.deltaX[userProfile].DamageBlocked = round(float(basket_list[5]), 2)
+
+            self.deltaX[userProfile].DamageTaken = round(float(basket_list[6]) - float(self.deltaX[userProfile].DamageTaken), 2)
+            self.playerDataDict[userProfile].DamageTaken = str(round(float(self.playerDataDict[userProfile].DamageTaken) + self.deltaX[userProfile].DamageTaken, 2))
+            self.deltaX[userProfile].DamageTaken = round(float(basket_list[6]), 2)
+
+            self.deltaX[userProfile].Deaths = int(basket_list[7]) - int(self.deltaX[userProfile].Deaths)
+            self.playerDataDict[userProfile].Deaths = str(int(self.playerDataDict[userProfile].Deaths) + self.deltaX[userProfile].Deaths)
+            self.deltaX[userProfile].Deaths = int(basket_list[7])
+
+            self.deltaX[userProfile].Eliminations = int(basket_list[8]) - int(self.deltaX[userProfile].Eliminations)
+            self.playerDataDict[userProfile].Eliminations = str(int(self.playerDataDict[userProfile].Eliminations) + self.deltaX[userProfile].Eliminations)
+            self.deltaX[userProfile].Eliminations = int(basket_list[8])
+
+            self.deltaX[userProfile].FinalBlows = int(basket_list[9]) + int(basket_list[11]) - int(self.deltaX[userProfile].FinalBlows)
+            self.playerDataDict[userProfile].FinalBlows = str(int(self.playerDataDict[userProfile].FinalBlows) + self.deltaX[userProfile].FinalBlows)
+            self.deltaX[userProfile].FinalBlows = int(basket_list[9])
+
+            self.deltaX[userProfile].EnvironmentalDeaths = int(basket_list[10]) - int(self.deltaX[userProfile].EnvironmentalDeaths)
+            self.playerDataDict[userProfile].EnvironmentalDeaths = str(int(self.playerDataDict[userProfile].EnvironmentalDeaths) + self.deltaX[userProfile].EnvironmentalDeaths)
+            self.deltaX[userProfile].EnvironmentalDeaths = int(basket_list[10])
+
+            self.deltaX[userProfile].EnvironmentalKills = int(basket_list[11]) - int(self.deltaX[userProfile].EnvironmentalKills)
+            self.playerDataDict[userProfile].EnvironmentalKills = str(int(self.playerDataDict[userProfile].EnvironmentalKills) + self.deltaX[userProfile].EnvironmentalKills)
+            self.deltaX[userProfile].EnvironmentalKills = int(basket_list[11])
+
+            self.deltaX[userProfile].HealingDealt = round(float(basket_list[12]) - float(self.deltaX[userProfile].HealingDealt), 2)
+            self.playerDataDict[userProfile].HealingDealt = str(round(float(self.playerDataDict[userProfile].HealingDealt) + self.deltaX[userProfile].HealingDealt, 2))
+            self.deltaX[userProfile].HealingDealt = round(float(basket_list[12]), 2)
+
+            self.deltaX[userProfile].ObjectiveKills = int(basket_list[13]) - int(self.deltaX[userProfile].ObjectiveKills)
+            self.playerDataDict[userProfile].ObjectiveKills = str(int(self.playerDataDict[userProfile].ObjectiveKills) + self.deltaX[userProfile].ObjectiveKills)
+            self.deltaX[userProfile].ObjectiveKills = int(basket_list[13])
+
+            self.deltaX[userProfile].SoloKills = int(basket_list[14]) - int(self.deltaX[userProfile].SoloKills)
+            self.playerDataDict[userProfile].SoloKills = str(int(self.playerDataDict[userProfile].SoloKills) + self.deltaX[userProfile].SoloKills)
+            self.deltaX[userProfile].SoloKills = int(basket_list[14])
+
+
+            self.deltaX[userProfile].UltimatesEarned = int(basket_list[15]) - int(self.deltaX[userProfile].UltimatesEarned)
+            self.playerDataDict[userProfile].UltimatesEarned = str(int(self.playerDataDict[userProfile].UltimatesEarned) + self.deltaX[userProfile].UltimatesEarned)
+            self.deltaX[userProfile].UltimatesEarned = int(basket_list[15])
+
+
+            self.deltaX[userProfile].UltimatesUsed = int(basket_list[16]) - int(self.deltaX[userProfile].UltimatesUsed)
+            self.playerDataDict[userProfile].UltimatesUsed = str(int(self.playerDataDict[userProfile].UltimatesUsed) + self.deltaX[userProfile].UltimatesUsed)
+            self.deltaX[userProfile].UltimatesUsed = int(basket_list[16])
+
+
+            self.deltaX[userProfile].HealingReceived = round(float(basket_list[17]) - float(self.deltaX[userProfile].HealingReceived), 2)
+            self.playerDataDict[userProfile].HealingReceived = str(round(float(self.playerDataDict[userProfile].HealingReceived) + self.deltaX[userProfile].HealingReceived, 2)) # if workshop code gonna improved then we should have delete handling process about healingreceived
+            self.deltaX[userProfile].HealingReceived = round(float(basket_list[17]), 2)
+
+
+            self.deltaX[userProfile].DefensiveAssists = int(basket_list[31]) - int(self.deltaX[userProfile].DefensiveAssists)
+            self.playerDataDict[userProfile].DefensiveAssists = str(int(self.playerDataDict[userProfile].DefensiveAssists) + self.deltaX[userProfile].DefensiveAssists)
+            self.deltaX[userProfile].DefensiveAssists = int(basket_list[31])
+
+
+            self.deltaX[userProfile].OffensiveAssists = int(basket_list[32]) - int(self.deltaX[userProfile].OffensiveAssists)
+            self.playerDataDict[userProfile].OffensiveAssists = str(int(self.playerDataDict[userProfile].OffensiveAssists) + self.deltaX[userProfile].OffensiveAssists)
+            self.deltaX[userProfile].OffensiveAssists = int(basket_list[32])
+        
         self.playerDataDict[userProfile].Hero = hero
-        self.playerDataDict[userProfile].HeroDamageDealt = basket_list[3]
-        self.playerDataDict[userProfile].BarrierDamageDealt = basket_list[4]
-        self.playerDataDict[userProfile].DamageBlocked = basket_list[5]
-        self.playerDataDict[userProfile].DamageTaken = basket_list[6]
-        self.playerDataDict[userProfile].Deaths = basket_list[7]
-        self.playerDataDict[userProfile].Eliminations = basket_list[8]
-        self.playerDataDict[userProfile].FinalBlows = str(int(basket_list[9]) + int(basket_list[11]))
-        self.playerDataDict[userProfile].EnvironmentalDeaths = basket_list[10]
-        self.playerDataDict[userProfile].EnvironmentalKills = basket_list[11]
-        self.playerDataDict[userProfile].HealingDealt = basket_list[12]
-        self.playerDataDict[userProfile].ObjectiveKills = basket_list[13]
-        self.playerDataDict[userProfile].SoloKills = basket_list[14]
-        self.playerDataDict[userProfile].UltimatesEarned = basket_list[15]
-        self.playerDataDict[userProfile].UltimatesUsed = basket_list[16]
-        self.playerDataDict[userProfile].HealingReceived = basket_list[17] # if workshop code gonna improved then we should have delete handling process about healingreceived
         self.playerDataDict[userProfile].UltimateCharge = basket_list[18]
         self.playerDataDict[userProfile].Position = basket_list[19] + ',' + basket_list[20] + ',' + basket_list[21]
         self.playerDataDict[userProfile].Cooldown1 = basket_list[23]
@@ -205,8 +267,6 @@ class LogHandler: # Log Parsing & Handling
         self.playerDataDict[userProfile].TimeElapsed = basket_list[28]
         self.playerDataDict[userProfile].MaxHealth = basket_list[29]
         self.playerDataDict[userProfile].Health = basket_list[30]
-        self.playerDataDict[userProfile].DefensiveAssists = basket_list[31]
-        self.playerDataDict[userProfile].OffensiveAssists = basket_list[32]
         self.playerDataDict[userProfile].IsBurning = basket_list[33]
         self.playerDataDict[userProfile].IsKnockedDown = basket_list[34]
         self.playerDataDict[userProfile].IsAsleep = basket_list[35]
@@ -229,25 +289,8 @@ class LogHandler: # Log Parsing & Handling
         self.playerDataDict[userProfile].Team2Player5InViewAngle = basket_list[54].rstrip()
 
     def finalBlows_stream_handler(self,basket_list): # set DeathBy ... 
-        userProfile = ''
-        if basket_list[2] != '냐옹' and basket_list[2] != 'nuGget' and basket_list[2] != 'Myun****':
-            userProfile = basket_list[2]
-        elif basket_list[2] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[2] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[2] == 'Myun****':
-            userProfile = 'Myunb0ng'
-        
-        victim = ''
-        if basket_list[3] != '냐옹' and basket_list[3] != 'nuGget' and basket_list[3] != 'Myun****':
-            victim = basket_list[3]
-        elif basket_list[3] == '냐옹':
-            victim = 'Yaki'
-        elif basket_list[3] == 'nuGget':
-            victim = 'Kellan'
-        elif basket_list[3] == 'Myun****':
-            victim = 'Myunb0ng'
+        userProfile = convertUserName(basket_list[2])
+        victim = convertUserName(basket_list[3])
         self.playerDataDict[victim].DeathByPlayer = userProfile
         self.playerDataDict[victim].DeathByHero = self.playerDataDict[userProfile].Hero
         self.playerDataDict[victim].DeathByAbility = basket_list[4]
@@ -258,15 +301,7 @@ class LogHandler: # Log Parsing & Handling
         return basket_list
     
     def boolean_handler(self, basket_list):
-        userProfile = ''
-        if basket_list[1] != '냐옹' and basket_list[1] != 'nuGget' and basket_list[1] != 'Myun****':
-            userProfile = basket_list[1]
-        elif basket_list[1] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[1] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[1] == 'Myun****':
-            userProfile = 'Myunb0ng'
+        userProfile = convertUserName(basket_list[1])
 
         if self.playerDataDict[userProfile].IsAlive == 'True':
             self.playerDataDict[userProfile].IsAlive = '1'
@@ -366,12 +401,13 @@ class LogHandler: # Log Parsing & Handling
         if self.playerDataDict[userProfile].Team2Player5InViewAngle == 'true' or self.playerDataDict[userProfile].Team2Player5InViewAngle == 'True':
             self.playerDataDict[userProfile].Team2Player5InViewAngle = '1'        
         elif self.playerDataDict[userProfile].Team2Player5InViewAngle == 'false' or self.playerDataDict[userProfile].Team2Player5InViewAngle == 'False':
-            self.playerDataDict[userProfile].Team2Player5InViewAngle = '0'   
+            self.playerDataDict[userProfile].Team2Player5InViewAngle = '0'    
 
     def create_table(self, mapname):
-        filename = self.fileName.split('.txt')[0] + '_' + mapname
+        filename = self.fileName.split('.txt')[0] + '_' + mapname.lower()
         self.fileName = filename
         valid_check_query = "SELECT * FROM information_schema.tables WHERE table_schema = \"" + self.dbName +  "\" AND table_name = \"" + filename + "\""
+        #print(valid_check_query)
         self.cursor.execute(valid_check_query)
         res = self.cursor.fetchall()
         if len(res) == 0 :
@@ -389,7 +425,7 @@ class LogHandler: # Log Parsing & Handling
             self.mysqlConnection.commit()
 
     def set_toFinalstatTable(self):
-        filename = self.fileName
+        filename = self.fileName.split('.txt')[0]
         valid_check_query = "SELECT * FROM toFinalstatTable where tablename = \"" + filename + "\""
         self.cursor.execute(valid_check_query)
         res = self.cursor.fetchall()
@@ -402,7 +438,7 @@ class LogHandler: # Log Parsing & Handling
         self.mysqlConnection.commit()
 
     def export_to_db(self, player):
-        tablename = '`' + self.fileName+ '`'
+        tablename = '`' + self.fileName + '`'
         p = self.playerDataDict[player].__dict__
         sql = 'INSERT INTO ' + tablename + ' values (%(Map)s, %(Section)s, %(Point)s, %(RoundName)s, %(Timestamp)s, %(Team)s, %(Player)s, %(Hero)s, %(HeroDamageDealt)s, %(BarrierDamageDealt)s, %(DamageBlocked)s, %(DamageTaken)s, %(Deaths)s, %(Eliminations)s, %(FinalBlows)s, %(EnvironmentalDeaths)s, %(EnvironmentalKills)s, %(HealingDealt)s, %(ObjectiveKills)s, %(SoloKills)s, %(UltimatesEarned)s, %(UltimatesUsed)s, %(HealingReceived)s, %(UltimateCharge)s, %(Cooldown1)s, %(Cooldown2)s, %(CooldownSecondaryFire)s, %(CooldownCrouching)s, %(IsAlive)s, %(Position)s, %(MaxHealth)s, %(DeathByHero)s, %(DeathByAbility)s, %(DeathByPlayer)s, %(Resurrected)s, %(DuplicatedHero)s, %(DuplicateStatus)s, %(Health)s, %(DefensiveAssists)s, %(OffensiveAssists)s, %(IsBurning)s, %(IsKnockedDown)s, %(IsInvincible)s, %(IsAsleep)s, %(IsFrozen)s, %(IsUnkillable)s, %(IsRooted)s, %(IsStunned)s, %(IsHacked)s, %(FacingDirection)s, %(Team1Player1InViewAngle)s, %(Team1Player2InViewAngle)s, %(Team1Player3InViewAngle)s, %(Team1Player4InViewAngle)s, %(Team1Player5InViewAngle)s, %(Team2Player1InViewAngle)s, %(Team2Player2InViewAngle)s, %(Team2Player3InViewAngle)s, %(Team2Player4InViewAngle)s, %(Team2Player5InViewAngle)s, %(Version)s);'
         self.cursor.execute(sql, p)
@@ -439,83 +475,25 @@ class LogHandler: # Log Parsing & Handling
             for i in range(0, 5):
                 self.playerDataDict[self.playerList[i]].Point = basket_list[2]
     
+   
     def dupstart_stream_handler(self,basket_list): # handling duplicate - duplicate ON
-        userProfile = ''
-        if basket_list[2] != '냐옹' and basket_list[2] != 'nuGget' and basket_list[2] != 'Myun****':
-            userProfile = basket_list[2]
-        elif basket_list[2] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[2] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[2] == 'Myun****':
-            userProfile = 'Myunb0ng'
+        userProfile = convertUserName(basket_list[2])
             
         hero = ''
-        if basket_list[3] != 'Lúcio' and basket_list[3] != 'Torbjörn' and basket_list[3] != 'D.Va':
+        if basket_list[3] != 'Lúcio' and basket_list[3] != 'Torbjörn' :
             hero = basket_list[3]
         elif basket_list[3] == 'Lúcio':
             hero = 'Lucio'
         elif basket_list[3] == 'Torbjörn':
             hero = 'Torbjorn'
-        elif basket_list[3] == 'D.Va':
-            hero = 'DVa'
-
         self.playerDataDict[userProfile].DuplicateStatus = 'DUPLICATING'
         self.playerDataDict[userProfile].DuplicatedHero = hero
     
     def dupend_stream_handler(self,basket_list): # handling duplicate - duplicate OFF
-        userProfile = ''
-        if basket_list[2] != '냐옹' and basket_list[2] != 'nuGget' and basket_list[2] != 'Myun****':
-            userProfile = basket_list[2]
-        elif basket_list[2] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[2] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[2] == 'Myun****':
-            userProfile = 'Myunb0ng'
-
+        userProfile = convertUserName(basket_list[2])
         self.playerDataDict[userProfile].DuplicateStatus = ''
         self.playerDataDict[userProfile].DuplicatedHero = ''
 
     def resurrect_stream_handler(self, basket_list): # handling resurrect event
-        userProfile = ''
-        if basket_list[2] != '냐옹' and basket_list[2] != 'nuGget' and basket_list[2] != 'Myun****':
-            userProfile = basket_list[2]
-        elif basket_list[2] == '냐옹':
-            userProfile = 'Yaki'
-        elif basket_list[2] == 'nuGget':
-            userProfile = 'Kellan'
-        elif basket_list[2] == 'Myun****':
-            userProfile = 'Myunb0ng'
-
+        userProfile = convertUserName(basket_list[2])
         self.playerDataDict[userProfile].Resurrected = 'RESURRECTED'
-    '''
-    def write_csv(self, player, result_csv, writer):
-        p = asdict(self.playerDataDict[player])
-        print(p)
-        writer.writerow(p)
-
-        self.cleansing_DeathBy(player)
-        self.cleansing_resurrect(player)
-        return 0
-    '''
-
-def main():
-    teamName = "New York Excelsior"
-    fileName = "20220327_01_SHD_Ilios.txt"
-    storage_client = storage.Client.from_service_account_json('./serviceAccountKey.json')
-    bucket_name = 'esports-social-media.appspot.com'
-    blobs = storage_client.list_blobs(bucket_name)
-    targetFileName = teamName + '/' + fileName
-    text = ''
-    for blob in blobs:
-        if targetFileName == blob.name:
-            text = blob.download_as_text(client=storage_client)
-    text = text.splitlines()
-    fileName = "20220327_01_SHD_Ilios.txt"
-    parser = LogHandler(teamName, fileName, text)
-    finalstat_file_name = parser.log_handler()
-    print(finalstat_file_name)
-       
-if __name__ == "__main__":
-    main()

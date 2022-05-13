@@ -268,8 +268,8 @@ class ScrimLog():
 
 
 def main():
-    teamName = "New York Excelsior"
-    fileName = "220423_214759_route 66"
+    teamName = "Guangzhou Charge"
+    fileName = "220503_140535_colosseo"
     scrim_sql = ScrimLog().update_FinalStat_to_sql(teamName, fileName)
 
        

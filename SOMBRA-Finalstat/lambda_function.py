@@ -2,7 +2,7 @@ import json
 from urllib import parse
 from ScrimLog import *
 
-def lambda_handler():#event, context):
+def lambda_handler(event, context):
     teamName = event['teamName']
     tableName = event['fileName'].split('.txt')[0]
     scrim_sql = ScrimLog().update_FinalStat_to_sql(teamName, tableName)

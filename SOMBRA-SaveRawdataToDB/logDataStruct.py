@@ -86,7 +86,28 @@ class LogPattern: # Regex log patterns
         self.pattern_finalblows = re.compile('(\[(.*?)\])\s(\d*\.?\d+),(FinalBlow),(\w*),(\w*),(\w*\s*\w*)')
         self.pattern_suicide = re.compile('(\[(.*?)\])\s(\d*\.?\d+),(Suicide),(\w*)')
         self.pattern_matchInfo = re.compile('(\[(.*?)\])\s(\w*\s*\w*\s*\w*|Watchpoint: Gibraltar|King\'s Row),(\w*\s*\w*),(\w*\s*\w*),(\d)')#,([+-]?([0-9]*[.])?[0-9]+)') # Added Float number for version
-        self.pattern_playerInfo = re.compile('(\[(.*?)\])\s(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76)')#,(\w*|Soldier: 76),(\w*|Soldier: 76)') for OW1
+        #self.pattern_playerInfo = re.compile('(\[(.*?)\])\s(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76),(\w*|Soldier: 76)')#,(\w*|Soldier: 76),(\w*|Soldier: 76)') for OW1
+        self.pattern_playerInfo = re.compile('(\[(.*?)\])\s([a-zA-Z가-힣0-9]|Soldier: 76)+,([a-zA-Z가-힣0-9]|Soldier: 76)+,([a-zA-Z가-힣0-9]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+,([a-zA-Z가-힣0-9*]|Soldier: 76)+')
         self.pattern_typeControl = re.compile('(\[(.*?)\])\s(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+)')
         self.pattern_typeOthers = re.compile('(\[(.*?)\])\s(\d*\.?\d+),(True|False),(\d*\.?\d+)')
         self.pattern_playerData = re.compile('(\[(.*?)\])\s(\d*\.?\d+),(\w*\s*\w*|Soldier: 76|D.Va),(\w*\s*\w*|Soldier: 76|D.Va),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+),(\W[-]?(\d*\.?\d+), [-]?(\d*\.?\d+), [-]?(\d*\.?\d+)\W),(\w*\s*\w*),(\d*\.?\d+),(\d*\.?\d+),(\d*\.?\d+)')#,//(\W[-]?(\d*\.?\d+), [-]?(\d*\.?\d+), [-]?(\d*\.?\d+)\W),(True|False),(True|False),(True|False),(True|False),(True|False),(True|False),(True|False),(True|False),(True|False),(True|False)')
+
+class deltaX:
+    def __init__(self):
+        self.HeroDamageDealt = 0
+        self.BarrierDamageDealt = 0
+        self.DamageBlocked = 0
+        self.DamageTaken = 0
+        self.Deaths = 0
+        self.Eliminations = 0
+        self.FinalBlows = 0
+        self.EnvironmentalDeaths = 0
+        self.EnvironmentalKills = 0
+        self.HealingDealt = 0
+        self.ObjectiveKills = 0
+        self.SoloKills = 0
+        self.UltimatesEarned = 0
+        self.UltimatesUsed = 0
+        self.HealingReceived = 0
+        self.DefensiveAssists = 0
+        self.OffensiveAssists = 0
