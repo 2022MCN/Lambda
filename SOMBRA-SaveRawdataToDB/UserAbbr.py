@@ -24,7 +24,8 @@ teamabbr : dict= {
     'Toronto Defiant': 'TOR',
     'Paris Eternal': 'PAR',
     'Florida Mayhem': 'FLA',
-    'Houston Outlaws': 'HOU'
+    'Houston Outlaws': 'HOU',
+    'T1': 'T1'
 }
 
 players_dict : dict= {
@@ -40,14 +41,15 @@ players_dict : dict= {
     'Dallas Fuel': ['SP9RK1E', 'Edison', 'Doha', 'guriyo', 'FEARLESS', 'Hanbin', 'ChiYo', 'Fielder'],
     'London Spitfire': ['SparkR', 'Shax', 'Backbone', 'Hadi', 'Poko', 'Admiral', 'Landon'],
     'Vancouver Titans': ['Aspire', 'sHockWave', 'Seicoe', 'False', 'Masaa', 'Aztac', 'Skairipa'],
-    'Boston Uprising': ['punk', 'Victoria', 'STRIKER', 'Valentine', 'Marve1', 'Faith', 'Crimzo', 'MCD'],
+    'Boston Uprising': ['Victoria', 'STRIKER', 'Valentine', 'Marve1', 'punk', 'Faith', 'Crimzo', 'MCD', 'BOS005'],
     'San Francisco Shock': ['Proper', 'Kilo', 's9mm', 'Coluge', 'FiNN', 'Viol2t'],
     'Atlanta Reign': ['Gator', 'Hawk', 'Kai', 'nero', 'Venom', 'Ojee', 'UltraViolet'],
-    'Washington Justice': ['Decay', 'Mag', 'Assassin', 'Happy', 'Krillin', 'OPENER', 'Kalios', 'WAS004', 'WAS008', 'WAS003', 'WAS002', 'WAS017', 'WAS018'],
-    'Toronto Defiant': ['Heesu', 'Twilight', 'HOTBA', 'CH0R0NG', 'MuZe', 'Finale', 'ALTHOUGH', 'TOR003', 'TOR005', 'TOR001', 'TOR006', 'TOR007', 'TOR002'],
-    'Paris Eternal': ['Naga', 'Daan', 'Kaan', 'dridro', 'Glister', 'Vestola'],
+    'Washington Justice': ['Decay', 'Mag', 'Assassin', 'Happy', 'Krillin', 'OPENER', 'Kalios'],
+    'Toronto Defiant': ['Heesu', 'Twilight', 'HOTBA', 'CH0R0NG', 'MuZe', 'Finale', 'ALTHOUGH'],
+    'Paris Eternal': ['Naga', 'Daan', 'Kaan', 'dridro', 'Glister', 'Vestola', 'wub'],
     'Florida Mayhem': ['SirMajed', 'CheckMate', 'Adam', 'SOMEONE', 'Anamo', 'Hydron', 'KariV', 'Xzi'],
-    'Houston Outlaws': ['Danteh', 'PIGGY', 'Pelican', 'Ir1s', 'Lastro', 'MER1T', 'HOU004', 'HOU001', 'HOU003', 'HOU006', 'HOU005', 'HOU002']
+    'Houston Outlaws': ['Danteh', 'PIGGY', 'Pelican', 'Ir1s', 'Lastro', 'MER1T'],
+    'T1': ['Clestyn', 'Na1st', 'sand', 'Ap3ach', 'A1IEN']
 }
 
 userabbr : dict = {
@@ -92,6 +94,7 @@ userabbr : dict = {
     'BOS002': 'ITSAL',
     'BOS012': 'Faith',
     'BOS013': 'Crimzo',
+    'BOS005': 'BOS005',
     'VAN020': 'Seicoe',
     'VAN012': 'Aspire',
     'VAN027': 'False',
@@ -125,12 +128,13 @@ userabbr : dict = {
     'PAR011': 'dridro',
     'PAR001': 'Kaan',
     'PAR007': 'Daan',
+    'PAR023': 'wub',
     'LDN001': 'Hadi',
     'LDN006': 'Landon',
     'LDN007': 'Admiral',
     'LDN003': 'Backbone',
-    'LDN005': 'LDN005',
-    'LDN004': 'LDN004',
+    'LDN005': 'SparkR',
+    'LDN004': 'Shax',
     'LDN002': 'Poko',
     'HOU004': 'MER1T',
     'HOU001': 'Pelican',
@@ -155,7 +159,20 @@ userabbr : dict = {
     'SEO011': 'Creative',
     'SEO001': 'Fits',
     'SEO002': 'Profit',
-    'SEO013': 'Stalk3r'
+    'SEO013': 'Stalk3r',
+    'DAL005': 'SP9RK1E',
+    'DAL014': 'Edison',
+    'DAL002': 'Hanbin',
+    'DAL022': 'Fielder',
+    'DAL020': 'ChiYo',
+    'DAL011': 'Doha',
+    'DAL008': 'guriyo',
+    'GLA006': 'kevster',
+    'GLA008': 'ANS',
+    'GLA005': 'Reiner',
+    'GLA009': 'shu',
+    'GLA011': 'FunnyAstro',
+    'GLA010': 'skewed'
 }
 
 '''
