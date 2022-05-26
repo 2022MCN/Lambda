@@ -1,194 +1,182 @@
-import pandas as pd 
-import numpy as np 
-import os 
+import pandas as pd
+import numpy as np
+import os
+import time
 from StatAbbr import *
 from MySQLConnection import *
-from sqlalchemy import exc 
-from MapNameList import * 
-from tqdm import tqdm
+from sqlalchemy import exc
+from MapNameList import *
 
 class PETH():
-    def __init__(self, dbname, FinalStatName=None):
-        self.set_import_type()
-        self.set_search_condition()
-        self.set_period()
-        if FinalStatName is None: 
-            pass 
+    def __init__(self, db_name, map=None, match_id=None, period=10):
+        self.db_name = db_name
+        self.period = period
+        if match_id is None or map is None:
+            pass
         else:
-            self.FinalStatName = FinalStatName
-            self.dbname = dbname
-
-    def set_import_type(self, import_type='sql'):
-        self.import_type = import_type 
+            self.match_id = match_id
+            self.map = map
 
     def set_df_init(self):
-        if self.import_type == 'sql': # import FinalStat from sql
-            dbname = self.dbname
-            tablename = 'finalstat'
-            match_id = self.FinalStatName.split('_')[0] + '_' + self.FinalStatName.split('_')[1]
-            mapname = self.FinalStatName.split('_')[3].split('.')[0]
-            if mapname in mapname_typocorrection.keys():
-                mapname = mapname_typocorrection[mapname]
-            if mapname in mapnamelist: 
-                num_map = 1
-            else: 
-                num_map = mapname[-1]
-            sql = f'SELECT * FROM {tablename} WHERE `MatchId`="{match_id}" AND `num_map`={num_map} AND `Map`="{mapname}";'
-            print(sql)
-            self.df_init = pd.read_sql(sql=sql, con=MySQLConnection(dbname=dbname).engine)
-            # self.df_init = MySQLConnection(dbname='scrim_finalstat').read_table_as_df(self.FinalStatName)
-        elif self.import_type == 'csv': # improt FinalStat from csv
-            self.FinalStatCsvName = self.FinalStatName
-            path_FinalStat = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
-            FinalStat = pd.read_csv(os.path.join(path_FinalStat, self.FinalStatCsvName))
-            self.df_init = FinalStat.reset_index()
+        db_name = self.db_name
+        table_name = 'finalstat'
+        match_id = self.match_id
+        map = self.map
 
-    def set_search_condition(self, event_name='FinalBlows/s', threshold=1):
-        if event_name is None: 
-            pass 
-        else: 
-            self.event_name = event_name 
-            self.threshold = threshold
-            self.stat_name_abbr = StatAbbr[self.event_name] # Abbreviation of event_name
-
-    def set_period(self, period=10):
-        if period is None: 
-            pass 
-        else: 
-            self.period = period 
-
-    def find_events(self):
-        self.set_df_init()
-        df_event_onset = self.df_init[self.df_init[self.event_name] >= self.threshold]
+        sql = f'select * from {table_name} where `MatchId`="{match_id}" and `Map` = "{map}";'
+        #print(sql)
+        self.df_init = pd.read_sql(sql = sql, con = MySQLConnection(dbname = db_name).engine)
+        self.timestamp_list = self.df_init['Timestamp'].drop_duplicates().tolist()
+        #print(self.df_init)
         
-        return df_event_onset
+    def set_search_condition(self, event_name=None, threshold=1):
+        if event_name is None:
+            pass
+        else:
+            self.event_name = event_name
+            self.threshold = threshold
+            self.stat_name_abbr = StatAbbr[self.event_name]
+            self.set_PETH()
+
+    def set_events(self):
+        self.set_df_init()
+        event_onset = self.df_init[self.df_init[self.event_name] >= self.threshold]
+        return event_onset
+        
+    def get_nearest_timestamp(self, timestamp):
+        for data in timestamp.drop_duplicates():
+            min_diff = -1
+            r_value = -1
+
+            for val in self.timestamp_list:
+                abs_diff = abs(val - data)
+
+                if min_diff == -1 or min_diff > abs_diff:
+                    min_diff = abs_diff
+                    r_value  = val
+            timestamp = timestamp.replace(to_replace=data, value=r_value)
+
+        return timestamp
 
     def set_PETH(self):
-        df_event_onset = self.find_events()
+        df_event_onset = self.set_events()
         
-        if len(df_event_onset) == 0: # event가 한 번도 일어나지 않았을 때
-            df_PETH = pd.DataFrame({'MatchId':[], 'num_map':[], 'Map':[], 'Section':[], 'RoundName':[], 'num_Event':[], 'ref_Team':[], 'ref_Player':[], 'ref_Hero':[], 'ref_Event':[], 'Team':[], 'Player':[], 'Hero':[], 'Timestamp':[]})
+        if len(df_event_onset) == 0:
+            df_PETH_res = pd.DataFrame({'MatchId':[], 'num_map':[], 'Map':[], 'Section':[], 'RoundName':[], 'num_Event':[], 'ref_Team':[], 'ref_Player':[], 'ref_Hero':[], 'ref_Event':[], 'Team':[], 'Player':[], 'Hero':[], 'Timestamp':[]})
         else:
             idx_col = ['MatchId', 'Map', 'Section', 'RoundName', 'Team', 'Player', 'Hero', 'Timestamp']
             num_Event = 0
             df_list = []
-            for multi_idx, row in df_event_onset.iterrows():
+            for idx, row in df_event_onset.iterrows():
                 num_Event += 1
                 # set reference vars
                 ref_match_id = row['MatchId']
                 ref_map_name = row['Map']
+                ref_timestamp = row['Timestamp']
                 ref_team_name = row['Team']
                 ref_player_name = row['Player']
                 ref_hero_name = row['Hero']
-
+                # PETH_timestamp
                 # align FinalStat by event onset
                 event_onset = row['Timestamp']
                 df_event_recorder = self.df_init[(self.df_init['Timestamp'] >= (event_onset - (self.period + 1))) & (self.df_init['Timestamp'] <= (event_onset + (self.period + 1)))]
                 df_event_recorder = df_event_recorder.copy() # make a copy to avoid SettingWithCopyWarning
                 df_event_recorder['EventOnset'] = event_onset
                 df_event_recorder['Timestamp'] -= event_onset
-                df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int) # Timestamp 소숫점 자리 버림
+                df_event_recorder['Timestamp'] = df_event_recorder['Timestamp'].astype(int)
                 
                 # reference columns
                 df_event_recorder['ref_Team'] = ref_team_name
                 df_event_recorder['ref_Player'] = ref_player_name
                 df_event_recorder['ref_Hero'] = ref_hero_name
-                df_event_recorder['ref_Event'] = self.event_name
+                event_name = ''
+                if self.event_name in tableAbbr:
+                    event_name = tableAbbr[self.event_name]
+                else:
+                    event_name = self.event_name
+                df_event_recorder['ref_Event'] = event_name
+                #df_event_recorder['ref_Timestamp'] = ref_timestamp + df_event_recorder['Timestamp']
+                df_event_recorder['ref_Timestamp'] = self.get_nearest_timestamp(ref_timestamp + df_event_recorder['Timestamp'])
+                df_event_recorder['PETH_Timestamp'] = df_event_recorder['Timestamp']
                 df_event_recorder['num_Event'] = num_Event 
 
                 # concat
                 df_list.append(df_event_recorder)
 
             df_PETH = pd.concat(df_list)            
-            df_PETH = df_PETH.set_index(['MatchId', 'num_map', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'Team', 'Player', 'Hero', 'Timestamp'])
+            df_PETH_res = df_PETH[['MatchId', 'num_map', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'ref_Timestamp', 'Team', 'Player', 'Hero', 'PETH_Timestamp']]
+            df_PETH = df_PETH.set_index(['MatchId', 'num_map', 'Map', 'Section', 'RoundName', 'num_Event', 'ref_Team', 'ref_Player', 'ref_Hero', 'ref_Event', 'ref_Timestamp', 'Team', 'Player', 'Hero', 'PETH_Timestamp'])
 
-        return df_PETH 
+        #df_PETH_res.to_csv('C:\\Users\\Sqix_OW\\Desktop\\Study\\DA Project\\practice\PETH\\skill_test.csv')
+        self.df_PETH = df_PETH_res.reset_index(level=0, drop=True)
 
     def get_PETH(self):
-        df_PETH = self.set_PETH()
+        return self.df_PETH
 
-        return df_PETH
+    def export_to_csv(self):
+        self.df_PETH.to_csv('C:\\Users\\Sqix_OW\\Desktop\\Study\\DA Project\\practice\PETH\\ult_test.csv')
 
-    def export_to_csv(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
-        # Transform event_name to Abbr
-        self.get_PETH().to_csv(save_dir + f'/PETH_{self.stat_name_abbr}_{self.FinalStatCsvName}')
+    def export_to_sql(self):
+        # multi-mod
+        def get_update_list():
+            sql_for_finalstat = f'select distinct MatchId, Map from finalstat;'
+            sql_for_peth = f'select distinct MatchId, Map from peth;'
+            df_finalstat_match_id_list = pd.read_sql(sql = sql_for_finalstat, con = MySQLConnection(dbname = self.db_name).engine).values.tolist()
+            df_peth_match_id_list = pd.read_sql(sql = sql_for_peth, con = MySQLConnection(dbname = self.db_name).engine).values.tolist()
+            update_list = [val for val in df_finalstat_match_id_list if val not in df_peth_match_id_list]
+            return update_list
+        # uni-mod
+        #print(self.get_PETH())
+        df_sql = MySQLConnection(input_df=self.get_PETH(), dbname=self.db_name)
+        try:
+            df_sql.export_to_db(table_name='peth', if_exists='append')
+            print(f'File Exported: {self.event_name} Event, {self.match_id}, {self.map}')
+        except exc.IntegrityError as e:
+            print(f"Integrityerror: {e}")
+'''
+if __name__ == "__main__":
+    starttime = time.time()
+    db_name = 'Draftify'
+    map = 'Colosseo'
+    match_id = '220507_072322'
+    period = 10
 
-    def update_PETH(self, save_dir=r'G:\공유 드라이브\NYXL Scrim Log\PETH'):
-        # set path
-        filepath = r'G:\공유 드라이브\NYXL Scrim Log\FinalStat'
-        filelist = os.listdir(filepath)
-        csv_filelist = [x for x in filelist if x.endswith('.csv')]
-        updated_csv = f'FilesUpdated_{self.stat_name_abbr}.txt'
-        
-        # open updated filelist
-        f = open(os.path.join(filepath, updated_csv), 'r+')
-        lines = f.readlines()
-        updated_filelist = []
+    UU = PETH(db_name, map, match_id, period)
 
-        for line in lines:
-            updated_filelist.append(line.replace('\n', ''))
+    event_name='UltimatesUsed/s'
+    threshold=1
 
-        # sort files to be updated
-        csv_filelist_to_update = list(set(csv_filelist) - set(updated_filelist))
-        csv_filelist_to_update.sort()
+    UU.set_search_condition(event_name, threshold)
+    UU.export_to_sql()
 
-        # export to csv in PETH folder
-        for filename in csv_filelist_to_update:
-            file_PETH = PETH(filename)
-            file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
-            file_PETH.export_to_csv()
+    CD1 = PETH(db_name, map, match_id, period)
 
-            f.write(filename+'\n')
-            print(f'File Exported: {filename}')
+    event_name='Cooldown1%/s'
+    threshold=0.01
+    CD1.set_search_condition(event_name, threshold)
+    CD1.export_to_sql()
 
-        f.close()
-    
-    def update_PETH_to_sql(self):
-        def get_filelist_all(): 
-            # set path
-            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-            filelist = os.listdir(filepath)
-            csv_filelist = [x for x in filelist if x.endswith('.csv')]
+    CD2 = PETH(db_name, map, match_id, period)
 
-            return csv_filelist
-            
-        def get_filelist_updated():
-            filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-            updated_csv = f'FilesUpdated_{self.stat_name_abbr}_MySQL.txt'
-            f = open(os.path.join(filepath, updated_csv), 'r+')
-            lines = f.readlines()
-            updated_filelist = []
+    event_name='Cooldown2%/s'
+    threshold=0.01
+    CD2.set_search_condition(event_name, threshold)
+    CD2.export_to_sql()
 
-            for line in lines:
-                updated_filelist.append(line.replace('\n', ''))
-            
-            f.close()
-            
-            return updated_filelist
+    CD3 = PETH(db_name, map, match_id, period)
 
-        filelist_FinalStat = get_filelist_all() # all filelist
-        filelist_updated = get_filelist_updated() # updated filelist
+    event_name='CooldownSecondaryFire%/s'
+    threshold=0.01
+    CD3.set_search_condition(event_name, threshold)
+    CD3.export_to_sql()
 
-        # sort files to be updated
-        filelist_to_update = list(set(filelist_FinalStat) - set(filelist_updated))
-        filelist_to_update.sort()
+    CD4 = PETH(db_name, map, match_id, period)
 
-        # export
-        filepath = r'G:/공유 드라이브/NYXL Scrim Log/Csv/'
-        updated_csv = f'FilesUpdated_{self.stat_name_abbr}_MySQL.txt'
-        for filename in tqdm(filelist_to_update):
-            f = open(os.path.join(filepath, updated_csv), 'a')
-            file_PETH = PETH(filename)
-            file_PETH.set_import_type('sql')
-            file_PETH.set_search_condition(event_name=self.event_name, threshold=self.threshold)
-            input_PETH = file_PETH.get_PETH()
-            df_sql = MySQLConnection(input_df=input_PETH.reset_index(), dbname='scrimloganalysis') # reset_index to export to mysql db
-            print('Data Exporting...')
-            try: # Insert dataframe into DB except duplicated primary keys
-                df_sql.export_to_db(table_name='peth', if_exists='append')
-                f.write(filename+'\n')
-                print(f'File Exported: {filename}_{file_PETH.stat_name_abbr} to {df_sql.dbname}')
-            except exc.IntegrityError:
-                f.write(filename+'\n') 
-                print('IntegrigyError')
-            f.close()
+    event_name='CooldownCrouching%/s'
+    threshold=0.01
+    CD4.set_search_condition(event_name, threshold)
+    CD4.export_to_sql()
+
+    print("time: ", time.time() - starttime)
+
+'''
